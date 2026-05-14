@@ -1,59 +1,60 @@
-# DeferRetry
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.3.
+IMPORTANT: This is a proof of concept for a potential Angular feature.  
 
-## Development server
+#### Automatically retry failed loads with `@error (retry N)`
 
-To start a local development server, run:
+Network blips, an evicted CDN edge, or a transient 5xx can leave your users staring at an `@error` block when the underlying problem already resolved itself. To recover from these transient failures, pass a `retry` parameter to `@error`:
 
-```bash
-ng serve
+```angular-html
+@defer {
+  <large-component />
+} @error (retry 3) {
+  <p>We couldn't load this section. Please refresh.</p>
+}
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+`N` must be a non-negative integer literal. Angular makes up to `N` additional load attempts before surfacing the `@error` block, for a total of up to `N + 1` attempts. Retries are sequential; each one waits for the previous attempt to fail before starting.
 
-## Code scaffolding
+Cache-busting works out of the box. The HTML specification mandates that browsers permanently cache failed dynamic `import()` requests against their original URL, so a naive retry would always reproduce the original failure. Angular sidesteps this by appending a `?ngRetry=N` query parameter to the chunk URL on each retry — no configuration required.
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+`@error (retry N)` composes with every other `@defer` feature, including `@loading`, all `on` and `when` triggers, prefetching, and incremental hydration. During hydration, the retry sequence is transparent: only the final outcome (success or exhaustion) is observed by the hydration runtime.
 
-```bash
-ng generate component component-name
+#### What renders during a retry?
+
+While retries are in flight, the block stays in its loading state — the `@loading` block (if you have one) keeps showing for the entire retry sequence. The `@error` block only renders after the **final** attempt fails.
+
+For example, with `@error (retry 3)` and a network that fails twice before succeeding on the third attempt:
+
+| Phase                | Block shown   |
+| -------------------- | ------------- |
+| Initial attempt      | `@loading`    |
+| Retry 1 (after fail) | `@loading`    |
+| Retry 2 (after fail) | `@loading`    |
+| Retry 3 succeeds     | Main `@defer` |
+
+If all four attempts had failed, the user would see `@loading` throughout, then `@error` once retries were exhausted. This means a `@loading` block with a `minimum` duration applies to the loading state as a whole, not to each individual attempt.
+
+##### Customizing retry behavior
+
+You can customize how Angular retries a failed `@defer` chunk download by providing your own `DeferBlockRetryHandler` and registering it with `provideDeferBlockRetryHandler` in your application's providers. This is useful for telemetry, exponential backoff, CDN failover, or integrity checks.
+
+```ts
+import {provideDeferBlockRetryHandler} from '@angular/core';
+
+bootstrapApplication(App, {
+  providers: [
+    provideDeferBlockRetryHandler(async (load, ctx) => {
+      if (ctx.attempt === 0) {
+        return load();
+      }
+      // Exponential backoff before each retry.
+      await new Promise((resolve) => setTimeout(resolve, 2 ** ctx.attempt * 100));
+      // `ctx.retry()` re-issues the chunk download with cache-busting applied,
+      // so you don't have to parse import URLs yourself.
+      return ctx.retry();
+    }),
+  ],
+});
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+The handler receives the compiler-generated `load` thunk and a `context` carrying `attempt` (zero-based) and `retry()` (cache-busted reload). When you provide your own handler, always use `ctx.retry()` on attempts after the first — calling `load()` again would hit the browser's failed-import cache and reproduce the original failure.
