@@ -1,11 +1,12 @@
+> [!IMPORTANT]
+> This is a proof of concept for a potential Angular feature.
 
-IMPORTANT: This is a proof of concept for a potential Angular feature.  
 
 #### Automatically retry failed loads with `@error (retry N)`
 
 Network blips, an evicted CDN edge, or a transient 5xx can leave your users staring at an `@error` block when the underlying problem already resolved itself. To recover from these transient failures, pass a `retry` parameter to `@error`:
 
-```angular-html
+```html
 @defer {
   <large-component />
 } @error (retry 3) {
