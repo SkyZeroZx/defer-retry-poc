@@ -37,7 +37,7 @@ If all four attempts had failed, the user would see `@loading` throughout, then 
 
 ##### Customizing retry behavior
 
-You can customize how Angular retries a failed `@defer` chunk download by providing your own `DeferBlockRetryHandler` and registering it with `provideDeferBlockRetryHandler` in your application's providers. This is useful for telemetry, exponential backoff, CDN failover, or integrity checks.
+You can customize how Angular retries a failed `@defer` chunk download by providing your own `DeferBlockRetryHandler` and registering it with `provideDeferBlockRetryHandler` in your application's providers. This is useful for telemetry, exponential backoff, CDN failover.
 
 ```ts
 import {provideDeferBlockRetryHandler} from '@angular/core';
