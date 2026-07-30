@@ -12982,7 +12982,7 @@ function reloadDeferDependencyWithCacheBust(load, attempt) {
     return load();
   }
   const retryUrl = appendRetryQueryParam(match[1], attempt); // `@vite-ignore` must stay as its own exact comment so Vite suppresses the
-  return import(/* @vite-ignore */retryUrl).then(mod => {
+  return import(retryUrl).then(mod => {
     const exportMatch = DEFER_EXPORT_NAME_PATTERN.exec(source);
     return exportMatch ? mod[exportMatch[1]] : mod;
   });
